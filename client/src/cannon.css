@@ -44,7 +44,9 @@
   
   .form-row {
     display: flex;
+    justify-content: space-between;
     gap: 15px;
+    margin-bottom: 5px;
   }
   
   .btn {

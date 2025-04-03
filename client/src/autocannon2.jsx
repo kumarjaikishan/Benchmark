@@ -1,10 +1,12 @@
 import { useState } from "react";
 import "./cannon.css";
+import TextField from '@mui/material/TextField';
 
 export default function AutocannonTester() {
   const [url, setUrl] = useState("");
   const [connections, setConnections] = useState(10);
   const [duration, setDuration] = useState(10);
+  const [pipelining, setpipelining] = useState(2);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -15,7 +17,7 @@ export default function AutocannonTester() {
       const response = await fetch("http://localhost:5000/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, connections, duration })
+        body: JSON.stringify({ url, connections, duration,pipelining })
       });
       const data = await response.json();
       console.log(data);
@@ -31,33 +33,38 @@ export default function AutocannonTester() {
     <div className="container">
       <h2 className="title">Autocannon Load Tester</h2>
       <div className="form-group">
-        <label>URL</label>
-        <input
+        <TextField id="outlined-basic" label="Enter URL"
           value={url}
+          sx={{ width: '100%' }}
+          size="small"
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Enter URL"
-          className="input-field"
-        />
+          variant="outlined" />
       </div>
       <div className="form-row">
-        <div className="form-group">
-          <label>Connections</label>
-          <input
-            type="number"
-            value={connections}
-            onChange={(e) => setConnections(Number(e.target.value))}
-            className="input-field"
-          />
-        </div>
-        <div className="form-group">
-          <label>Duration (seconds)</label>
-          <input
-            type="number"
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
-            className="input-field"
-          />
-        </div>
+        <TextField id="outlined-basic" label="Connections"
+          value={connections}
+          size="small"
+          sx={{ width: '32%' }}
+          type="number"
+          onChange={(e) => setConnections(Number(e.target.value))}
+          variant="outlined" />
+
+        <TextField id="outlined-basic" label="Duration (seconds)"
+          value={duration}
+          size="small"
+          sx={{ width: '32%' }}
+          type="number"
+          onChange={(e) => setDuration(Number(e.target.value))}
+          variant="outlined" />
+        <TextField id="outlined-basic" label="pipelining"
+          value={pipelining}
+          title="Number of requests sent per connection before waiting for a response."
+          size="small"
+          sx={{ width: '32%' }}
+          type="number"
+          onChange={(e) => setpipelining(Number(e.target.value))}
+          variant="outlined" />
+
       </div>
       <button onClick={runTest} disabled={loading} className="btn">
         {loading ? "Running..." : "Start Test"}

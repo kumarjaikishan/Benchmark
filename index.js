@@ -11,13 +11,14 @@ app.get("/", (req,res)=>{
 })
 
 app.post("/test", async (req, res) => {
-  const { url, connections, duration } = req.body;
+  const { url, connections, duration,pipelining } = req.body;
 
   try {
     const result = await autocannon({
       url,
       connections,
-      duration
+      duration,
+      pipelining
     });
     res.json(result);
   } catch (error) {
