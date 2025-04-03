@@ -97,23 +97,27 @@ export default function AutocannonTester() {
         <div className="bodyhead">
           <div>
             <div className="headtitle">Connections</div>
-            <div>100</div>
+            <div>{results?.connections}</div>
           </div>
           <div>
             <div className="headtitle">Duration</div>
-            <div>100</div>
+            <div>{results?.duration}</div>
           </div>
           <div>
             <div className="headtitle">Errors</div>
-            <div>100</div>
+            <div>{results?.errors}</div>
           </div>
           <div>
             <div className="headtitle">Pipelining</div>
-            <div>100</div>
+            <div>{results?.pipelining}</div>
           </div>
           <div>
             <div className="headtitle">non2xx</div>
-            <div>100</div>
+            <div>{results?.non2xx}</div>
+          </div>
+          <div>
+            <div className="headtitle">Timeouts</div>
+            <div>{results?.timeouts}</div>
           </div>
         </div>
         <div className="head">Requests</div>
@@ -125,7 +129,7 @@ export default function AutocannonTester() {
             </div>
           ))}
         </div>
-        <div className="head">Latency</div>
+        <div className="head">Latency (in milliseconds)</div>
         <div className="bodyhead">
         {Object.entries(results?.latency).map(([key, value], index) => (
             <div key={key}>
@@ -134,7 +138,7 @@ export default function AutocannonTester() {
             </div>
           ))}
         </div>
-        <div className="head">Throughput</div>
+        <div className="head">Throughput (in bytes per second)</div>
         <div className="bodyhead">
           {Object.entries(results?.throughput).map(([key, value], index) => (
             <div key={key}>
