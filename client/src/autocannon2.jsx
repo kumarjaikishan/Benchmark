@@ -5,7 +5,7 @@ import TextField from '@mui/material/TextField';
 export default function AutocannonTester() {
   const [url, setUrl] = useState("");
   const [connections, setConnections] = useState(10);
-  const [duration, setDuration] = useState(10);
+  const [duration, setDuration] = useState(5);
   const [pipelining, setpipelining] = useState(2);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ export default function AutocannonTester() {
       const response = await fetch("http://localhost:5000/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, connections, duration,pipelining })
+        body: JSON.stringify({ url, connections, duration, pipelining })
       });
       const data = await response.json();
       console.log(data);
@@ -69,7 +69,81 @@ export default function AutocannonTester() {
       <button onClick={runTest} disabled={loading} className="btn">
         {loading ? "Running..." : "Start Test"}
       </button>
-
+      <div className="result">
+        <div className="head">Responses</div>
+        <div className="bodyhead">
+          <div>
+            <div className="headtitle">1xx</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">2xx</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">3xx</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">4xx</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">5xx</div>
+            <div>100</div>
+          </div>
+        </div>
+        <div className="head">Miscellenous</div>
+        <div className="bodyhead">
+          <div>
+            <div className="headtitle">Connections</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">Duration</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">Errors</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">Pipelining</div>
+            <div>100</div>
+          </div>
+          <div>
+            <div className="headtitle">non2xx</div>
+            <div>100</div>
+          </div>
+        </div>
+        <div className="head">Requests</div>
+        <div className="bodyhead">
+        {Object.entries(results?.requests).map(([key, value], index) => (
+            <div key={key}>
+              <div className="headtitle">{key}</div>
+              <div>{JSON.stringify(value)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="head">Latency</div>
+        <div className="bodyhead">
+        {Object.entries(results?.latency).map(([key, value], index) => (
+            <div key={key}>
+              <div className="headtitle">{key}</div>
+              <div>{JSON.stringify(value)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="head">Throughput</div>
+        <div className="bodyhead">
+          {Object.entries(results?.throughput).map(([key, value], index) => (
+            <div key={key}>
+              <div className="headtitle">{key}</div>
+              <div>{JSON.stringify(value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
       {results && (
         <div className="results">
           <h3 className="results-title">Results</h3>
