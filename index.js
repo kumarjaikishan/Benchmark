@@ -21,11 +21,14 @@ app.post("/test", async (req, res) => {
   }
   const jai = await detectProtocol(newurl);
   console.log("protocol detected:", jai)
-  newurl = jai+"://"+newurl;
+  if (jai == null) {
+    return res.status(400).json({ error: "Please send a proper site link." });
+  }
+  newurl = jai + "://" + newurl;
 
   try {
     const result = await autocannon({
-      url:newurl,
+      url: newurl,
       connections,
       duration,
       pipelining

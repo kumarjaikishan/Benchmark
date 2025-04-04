@@ -1,15 +1,14 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+
+import { ToastContainer } from 'react-toastify';
 import './App.css'
-import AutocannonTester from './autocannon2'
+import AutocannonTester from './autocannon'
 
 function App() {
-  const [count, setCount] = useState(0)
 
   return (
     <>
-    <AutocannonTester/>
+      <ToastContainer closeOnClick={true} pauseOnFocusLoss={true} />
+      <AutocannonTester />
     </>
   )
 }
