@@ -38,7 +38,7 @@ export default function AutocannonTester() {
     setLoading(true);
     setResults(null);
     try {
-      const response = await fetch("http://localhost:5000/test", {
+      const response = await fetch("/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, connections, duration, pipelining })
