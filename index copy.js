@@ -12,22 +12,23 @@ app.get("/", (req, res) => {
 })
 
 app.post("/test", async (req, res) => {
-  const { url, connections, duration, pipelining } = req.body;
+  let { url, connections, duration, pipelining } = req.body;
+  url = url.trim().replace(/^(https?:\/\/)?\/?/, '');
+
   let newurl = url;
-  let neturl=newurl
   if (newurl.startsWith('http')) {
     newurl = url.split('//')[1]
-    neturl=newurl;
   }
-  console.log("neturl always:", neturl)
   const jai = await detectProtocol(newurl);
   console.log("protocol detected:", jai)
-  newurl = jai+"://"+neturl;
-  console.log("final protocol formed:", newurl)
+  if (jai == null) {
+    return res.status(400).json({ error: "Please send a proper site link." });
+  }
+  newurl = jai + "://" + newurl;
 
   try {
     const result = await autocannon({
-      url:newurl,
+      url: newurl,
       connections,
       duration,
       pipelining

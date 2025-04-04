@@ -48,7 +48,7 @@ export default function AutocannonTester() {
       if (!response.ok) {
         return toast.warn(data.error, { autoClose: 1800 });
       }
-      toast.success("Done👍", { autoClose: 1800 });
+       toast.success("Done👍", { autoClose: 1800 });
       setResults(data);
     } catch (error) {
       toast.error(error?.message || "Something went wrong", { autoClose: 2500 });
@@ -97,20 +97,9 @@ export default function AutocannonTester() {
             variant="outlined" />
         </Tooltip>
       </div>
-      {/* <button onClick={runTest} disabled={loading} className="btn">
+      <button onClick={runTest} disabled={loading} className="btn">
         {loading ? "Running..." : "Start Test"}
-      </button> */}
-
-      <Button
-        onClick={runTest}
-        loading={loading}
-        loadingPosition="end"
-        variant="contained"
-        sx={{ marginBottom: '10px', width: '98%' }}
-      >
-        Start Test
-      </Button>
-
+      </button>
       {results &&
         <div className="result">
           <div style={{ marginTop: '20px', fontSize: '1.4em', fontWeight: '700' }}>Result - {results?.url}</div>
@@ -153,12 +142,7 @@ export default function AutocannonTester() {
               </div>
               <div>
                 <div className="headtitle">Data Read</div>
-                <div>
-                  {results?.throughput?.total > 1024 * 1024
-                    ? `${(results?.throughput?.total / 1024 / 1024).toFixed(1)} MB`
-                    : `${(results?.throughput?.total / 1024).toFixed(1)} KB`}
-                </div>
-
+                <div>{(results?.throughput?.total / 1024 / 1024).toFixed(1)} MB</div>
               </div>
               <div>
                 <div className="headtitle">Errors</div>
