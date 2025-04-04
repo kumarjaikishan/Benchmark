@@ -12,16 +12,18 @@ app.get("/", (req, res) => {
 })
 
 app.post("/test", async (req, res) => {
-  let { url, connections, duration, pipelining } = req.body;
-  url = url.trim().replace(/^(https?:\/\/)?\/?/, '');
-
+  const { url, connections, duration, pipelining } = req.body;
   let newurl = url;
+  let neturl=newurl
   if (newurl.startsWith('http')) {
     newurl = url.split('//')[1]
+    neturl=newurl;
   }
+  console.log("neturl always:", neturl)
   const jai = await detectProtocol(newurl);
   console.log("protocol detected:", jai)
-  newurl = jai+"://"+newurl;
+  newurl = jai+"://"+neturl;
+  console.log("final protocol formed:", newurl)
 
   try {
     const result = await autocannon({

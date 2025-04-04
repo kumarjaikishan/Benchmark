@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "jai": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.0.1",
     "@mui/lab": "^7.0.0-beta.10",
     "@mui/material": "^7.0.1",
     "react": "^19.0.0",
