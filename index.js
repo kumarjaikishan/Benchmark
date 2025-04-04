@@ -38,6 +38,7 @@ app.post("/test", async (req, res) => {
     });
     res.json(result);
   } catch (error) {
+    console.log(error)
     res.status(500).json({ error: "Error running Autocannon test" });
   }
 });
@@ -48,6 +49,7 @@ const detectProtocol = async (url) => {
     const httpsRes = await axios.head(`https://${url}`, { maxRedirects: 0 });
     if (httpsRes.status >= 200 && httpsRes.status < 400) return 'https';
   } catch (err) {
+    console.log(err)
     if (err.response?.status >= 300 && err.response?.status < 400) {
       // It's a redirect, still counts
       return 'https';
@@ -58,6 +60,7 @@ const detectProtocol = async (url) => {
     const httpRes = await axios.head(`http://${url}`, { maxRedirects: 0 });
     if (httpRes.status >= 200 && httpRes.status < 400) return 'http';
   } catch (err) {
+    console.log(err)
     if (err.response?.status >= 300 && err.response?.status < 400) {
       return 'http';
     }
