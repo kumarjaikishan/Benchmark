@@ -3,7 +3,7 @@ const cors = require("cors");
 const autocannon = require("autocannon");
 const axios = require('axios');
 const path = require('path');
-const PORT = process.env.port || 5006;
+const port = process.env.PORT || 5006;
 
 const app = express();
 app.use(cors());
@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 app.get('/port', (req, res) => {
-  res.json({"port":PORT})
+  res.json({"port":port})
 });
 
 app.post("/test", async (req, res) => {
@@ -74,4 +74,4 @@ const detectProtocol = async (url) => {
 };
 
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(port, () => console.log(`Server running on port ${port}`));
