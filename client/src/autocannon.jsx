@@ -17,6 +17,7 @@ export default function AutocannonTester() {
   const [showallRequests, setshowallRequests] = useState(false);
   const [showallLatency, setshowallLatency] = useState(false);
   const [showallThroughput, setshowallThroughput] = useState(false);
+  const [timer, setTimer] = useState(0);
 
   const importantKeys = ["average", "mean", "stddev", "min", "max"];
 
@@ -37,8 +38,21 @@ export default function AutocannonTester() {
 
     setLoading(true);
     setResults(null);
+    const id = toast.loading(`Running ... ${timer}s`);
+
+    let timere = setInterval(() => {
+      setTimer((prev)=> {
+        const newTime = prev + 1;
+        toast.update(id, {
+          render: `Running... ${newTime}s`,
+        });
+
+        return newTime;
+      });
+    }, 1000);
+
     try {
-      const response = await fetch("/test", {
+      const response = await fetch("http://localhost:5006/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, connections, duration, pipelining })
@@ -46,15 +60,19 @@ export default function AutocannonTester() {
       const data = await response.json();
       console.log(data);
       if (!response.ok) {
-        return toast.warn(data.error, { autoClose: 1800 });
+        // return toast.warn(data.error, { autoClose: 1800 });
+       return toast.update(id, { render: data.error, type: "warning", isLoading: false, autoClose: 1800 });
       }
-      toast.success("Done👍", { autoClose: 1800 });
+      // toast.success("Done👍", { autoClose: 1800 });
+       toast.update(id, { render:"Done👍", type: "success", isLoading: false, autoClose: 1800 });
       setResults(data);
     } catch (error) {
-      toast.error(error?.message || "Something went wrong", { autoClose: 2500 });
-
+      // toast.error(error?.message || "Something went wrong", { autoClose: 2500 });
+      toast.update(id, { render:error?.message || "Something went wrong", type: "error", isLoading: false, autoClose: 2500 });
     } finally {
       setLoading(false);
+      clearInterval(timere);
+      setTimer(0)
     }
   };
 
@@ -108,7 +126,8 @@ export default function AutocannonTester() {
         variant="contained"
         sx={{ marginBottom: '10px', width: '98%' }}
       >
-        Start Test
+        Start Test 
+        {/* {loading && `${timer}s`} */}
       </Button>
 
       {results &&
