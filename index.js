@@ -19,7 +19,9 @@ app.get('/port', (req, res) => {
 });
 
 app.post("/test", async (req, res) => {
-  let { url, connections, duration, pipelining } = req.body;
+  let { url, connections, duration, pipelining, isduration } = req.body;
+  console.log(req.body)
+
   url = url.trim().replace(/^(https?:\/\/)?\/?/, '');
 
   let newurl = url;
@@ -34,12 +36,18 @@ app.post("/test", async (req, res) => {
   newurl = jai + "://" + newurl;
 
   try {
-    const result = await autocannon({
+    const options = {
       url: newurl,
-      connections,
-      duration,
-      pipelining
-    });
+      connections: connections,
+      pipelining: pipelining,
+    };
+
+    if (isduration) {
+      options.duration = duration;
+    } else {
+      options.amount = duration; // or maybe "amount" if you're using a separate field
+    }
+    const result = await autocannon(options);
     res.json(result);
   } catch (error) {
     console.log(error)

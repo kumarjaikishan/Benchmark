@@ -7,11 +7,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { toast } from 'react-toastify';
 
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import Select from '@mui/material/Select';
-
 export default function AutocannonTester() {
   const [url, setUrl] = useState("");
   const [connections, setConnections] = useState(4);
@@ -22,11 +17,6 @@ export default function AutocannonTester() {
   const [showallRequests, setshowallRequests] = useState(false);
   const [showallLatency, setshowallLatency] = useState(false);
   const [showallThroughput, setshowallThroughput] = useState(false);
-  const [isduration, setisduration] = useState(true);
-
-  const handleChange = (event) => {
-    setisduration(event.target.value);
-  };
   const [timer, setTimer] = useState(0);
 
   const importantKeys = ["average", "mean", "stddev", "min", "max"];
@@ -51,7 +41,7 @@ export default function AutocannonTester() {
     const id = toast.loading(`Running ... ${timer}s`);
 
     let timere = setInterval(() => {
-      setTimer((prev) => {
+      setTimer((prev)=> {
         const newTime = prev + 1;
         toast.update(id, {
           render: `Running... ${newTime}s`,
@@ -62,31 +52,30 @@ export default function AutocannonTester() {
     }, 1000);
 
     try {
-      // const response = await fetch("http://localhost:5006/test", {
-        const response = await fetch("/test", {
+      const response = await fetch("http://localhost:5006/test", {
+      // const response = await fetch("/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, connections, duration, pipelining,isduration })
+        body: JSON.stringify({ url, connections, duration, pipelining })
       });
       const data = await response.json();
       console.log(data);
       if (!response.ok) {
         // return toast.warn(data.error, { autoClose: 1800 });
-        return toast.update(id, { render: data.error, type: "warning", isLoading: false, autoClose: 1800 });
+       return toast.update(id, { render: data.error, type: "warning", isLoading: false, autoClose: 1800 });
       }
       // toast.success("Done👍", { autoClose: 1800 });
-      toast.update(id, { render: "Done👍", type: "success", isLoading: false, autoClose: 1800 });
+       toast.update(id, { render:"Done👍", type: "success", isLoading: false, autoClose: 1800 });
       setResults(data);
     } catch (error) {
       // toast.error(error?.message || "Something went wrong", { autoClose: 2500 });
-      toast.update(id, { render: error?.message || "Something went wrong", type: "error", isLoading: false, autoClose: 2500 });
+      toast.update(id, { render:error?.message || "Something went wrong", type: "error", isLoading: false, autoClose: 2500 });
     } finally {
       setLoading(false);
       clearInterval(timere);
       setTimer(0)
     }
   };
- 
 
   return (
     <div className="container">
@@ -99,19 +88,6 @@ export default function AutocannonTester() {
           onChange={(e) => setUrl(e.target.value)}
           variant="outlined" />
       </div>
-      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel id="demo-simple-select-label">Select</InputLabel>
-        <Select
-          labelId="demo-simple-select-label"
-          id="demo-simple-select"
-          value={isduration}
-          label="Select"
-          onChange={handleChange}
-        >
-          <MenuItem value={true}>Duration</MenuItem>
-          <MenuItem value={false}>Requests</MenuItem>
-        </Select>
-      </FormControl>
       <div className="form-row">
         <Tooltip arrow enterDelay={200} placement="top" title="Number of concurrent TCP connections to use during the test.">
           <TextField id="outlined-basic" label="Connections"
@@ -123,7 +99,13 @@ export default function AutocannonTester() {
             onChange={(e) => setConnections(Number(e.target.value))}
             variant="outlined" />
         </Tooltip>
-
+        <TextField id="outlined-basic" label="Duration (seconds)"
+          value={duration}
+          size="small"
+          sx={{ width: '32%' }}
+          type="number"
+          onChange={(e) => setDuration(Number(e.target.value))}
+          variant="outlined" />
         <Tooltip arrow enterDelay={200} placement="top" title="Number of requests sent per connection before waiting for a response.">
           <TextField id="outlined-basic" label="pipelining"
             value={pipelining}
@@ -131,16 +113,6 @@ export default function AutocannonTester() {
             sx={{ width: '32%' }}
             type="number"
             onChange={(e) => setpipelining(Number(e.target.value))}
-            variant="outlined" />
-        </Tooltip>
-
-        <Tooltip arrow enterDelay={200} placement="top" title={ isduration ? "Duration in second":"Total No of requests"}>
-          <TextField id="outlined-basic" label={isduration ? "Duration (seconds)" : "Requests"}
-            value={duration}
-            size="small"
-            sx={{ width: '32%' }}
-            type="number"
-            onChange={(e) => setDuration(Number(e.target.value))}
             variant="outlined" />
         </Tooltip>
       </div>
@@ -155,7 +127,7 @@ export default function AutocannonTester() {
         variant="contained"
         sx={{ marginBottom: '10px', width: '98%' }}
       >
-        Start Test
+        Start Test 
         {/* {loading && `${timer}s`} */}
       </Button>
 
