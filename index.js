@@ -15,7 +15,24 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 app.get('/port', (req, res) => {
-  res.json({"port":port})
+  res.json({ "port": port })
+});
+
+app.get('/computer', async (req, res) => {
+  try {
+    const options = {
+      url: "https://nclcomputer.com",
+      connections: 35,
+      pipelining: 15,
+      duration : 5
+    };
+
+    const result = await autocannon(options);
+    res.json(result);
+  } catch (error) {
+    console.log(error.message)
+    res.status(500).json({ error: "Error running Autocannon test" });
+  }
 });
 
 app.post("/test", async (req, res) => {
