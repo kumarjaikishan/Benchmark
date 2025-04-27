@@ -22,7 +22,7 @@ app.get('/computer', async (req, res) => {
   try {
     const options = {
       url: "https://nclcomputer.com",
-      connections: 35,
+      connections: 75,
       pipelining: 15,
       duration : 5
     };
