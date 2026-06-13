@@ -9,10 +9,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use(express.static(path.join(__dirname, 'client', 'dist')));
+const clientDistPath = path.join(__dirname, 'client', 'dist');
+app.use(express.static(clientDistPath));
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  res.sendFile(path.join(clientDistPath, 'index.html'));
 });
 
 app.get('/port', (req, res) => {
@@ -29,6 +30,12 @@ app.get('/computer', async (req, res) => {
     };
 
     const result = await runAutocannon(options);
+    result.summary = buildResultSummary(result, {
+      mode: isduration ? 'duration' : 'requests',
+      target: Number(duration),
+      connections: Number(connections),
+      pipelining: Number(pipelining),
+    });
     res.json(result);
   } catch (error) {
     console.error(error.stack || error.message);
@@ -38,32 +45,30 @@ app.get('/computer', async (req, res) => {
 
 app.post("/test", async (req, res) => {
   let { url, connections, duration, pipelining, isduration } = req.body;
-  console.log(req.body);
 
-  url = url.trim().replace(/^(https?:\/\/)?\/?/, '');
-
-  let newurl = url;
-  if (newurl.startsWith('http')) {
-    newurl = url.split('//')[1];
+  const validation = validateTestInput({ url, connections, duration, pipelining });
+  if (validation.error) {
+    return res.status(400).json({ error: validation.error });
   }
-  const jai = await detectProtocol(newurl);
-  console.log("protocol detected:", jai);
-  if (jai == null) {
+
+  const normalizedHost = normalizeTarget(url);
+  const protocol = await detectProtocol(normalizedHost);
+  if (protocol == null) {
     return res.status(400).json({ error: "Please send a proper site link." });
   }
-  newurl = jai + "://" + newurl;
+  const targetUrl = `${protocol}://${normalizedHost}`;
 
   try {
     const options = {
-      url: newurl,
-      connections: connections,
-      pipelining: pipelining,
+      url: targetUrl,
+      connections: Number(connections),
+      pipelining: Number(pipelining),
     };
 
     if (isduration) {
-      options.duration = duration;
+      options.duration = Number(duration);
     } else {
-      options.amount = duration;
+      options.amount = Number(duration);
     }
 
     const result = await runAutocannon(options);
@@ -83,22 +88,68 @@ const runAutocannon = (options) => {
   });
 };
 
+const buildResultSummary = (result, requested) => {
+  const responseCount = ['1xx', '2xx', '3xx', '4xx', '5xx'].reduce(
+    (total, key) => total + Number(result?.[key] || 0),
+    0
+  );
+
+  return {
+    actualRequests: Number(result?.requests?.total || 0),
+    responsesReceived: responseCount,
+    requested,
+  };
+};
+
+const validateTestInput = ({ url, connections, duration, pipelining }) => {
+  if (typeof url !== 'string' || url.trim() === '') {
+    return { error: 'Please enter a site URL.' };
+  }
+
+  const numericFields = [
+    ['connections', connections, 1, 500],
+    ['pipelining', pipelining, 1, 100],
+    ['duration or requests', duration, 1, 100000],
+  ];
+
+  for (const [label, value, min, max] of numericFields) {
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < min || number > max) {
+      return { error: `Please enter ${label} between ${min} and ${max}.` };
+    }
+  }
+
+  return {};
+};
+
+const normalizeTarget = (value) => {
+  return value
+    .trim()
+    .replace(/^(https?:\/\/)/i, '')
+    .replace(/^\/+/, '')
+    .split('/')[0];
+};
+
 const detectProtocol = async (url) => {
+  const requestOptions = {
+    maxRedirects: 0,
+    timeout: 5000,
+    validateStatus: (status) => status >= 200 && status < 400,
+  };
+
   try {
-    const httpsRes = await axios.head(`https://${url}`, { maxRedirects: 0 });
+    const httpsRes = await axios.head(`https://${url}`, requestOptions);
     if (httpsRes.status >= 200 && httpsRes.status < 400) return 'https';
   } catch (err) {
-    console.log(err.message);
     if (err.response?.status >= 300 && err.response?.status < 400) {
       return 'https';
     }
   }
 
   try {
-    const httpRes = await axios.head(`http://${url}`, { maxRedirects: 0 });
+    const httpRes = await axios.head(`http://${url}`, requestOptions);
     if (httpRes.status >= 200 && httpRes.status < 400) return 'http';
   } catch (err) {
-    console.log(err.message);
     if (err.response?.status >= 300 && err.response?.status < 400) {
       return 'http';
     }

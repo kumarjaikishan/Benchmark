@@ -1,291 +1,335 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import "./cannon.css";
-import Tooltip from '@mui/material/Tooltip';
-import TextField from '@mui/material/TextField';
-import Button from '@mui/material/Button';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import { toast } from 'react-toastify';
+import Button from "@mui/material/Button";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import { toast } from "react-toastify";
 
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import Select from '@mui/material/Select';
+const PRIMARY_KEYS = ["average", "mean", "stddev", "min", "max"];
+
+const formatNumber = (value, digits = 1) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: digits,
+  }).format(number);
+};
+
+const formatBytes = (value) => {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${formatNumber(bytes / 1024 ** index, 1)} ${units[index]}`;
+};
+
+const metricEntries = (section, showAll) => {
+  return Object.entries(section || {}).filter(([key]) => showAll || PRIMARY_KEYS.includes(key));
+};
+
+const requestedTargetLabel = (summary) => {
+  const requested = summary?.requested;
+  if (!requested) return "Not available";
+  return requested.mode === "requests"
+    ? `${formatNumber(requested.target, 0)} requested`
+    : `${formatNumber(requested.target, 0)} seconds`;
+};
+
+const StatCard = ({ label, value, hint }) => (
+  <div className="stat-card" title={hint}>
+    <span>{label}</span>
+    <strong>{value}</strong>
+  </div>
+);
+
+const MetricSection = ({ title, unit, entries, showAll, onToggle, formatter = formatNumber }) => (
+  <section className="result-section">
+    <div className="section-header">
+      <div>
+        <h3>{title}</h3>
+        {unit && <p>{unit}</p>}
+      </div>
+      <Button size="small" variant="outlined" onClick={onToggle}>
+        {showAll ? "Show less" : "Show more"}
+      </Button>
+    </div>
+    <div className="metric-grid">
+      {entries.map(([key, value]) => (
+        <StatCard key={key} label={key} value={formatter(value)} />
+      ))}
+    </div>
+  </section>
+);
 
 export default function AutocannonTester() {
   const [url, setUrl] = useState("");
   const [connections, setConnections] = useState(4);
   const [duration, setDuration] = useState(3);
-  const [pipelining, setpipelining] = useState(2);
+  const [pipelining, setPipelining] = useState(2);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [showallRequests, setshowallRequests] = useState(false);
-  const [showallLatency, setshowallLatency] = useState(false);
-  const [showallThroughput, setshowallThroughput] = useState(false);
-  const [isduration, setisduration] = useState(true);
+  const [showAllRequests, setShowAllRequests] = useState(false);
+  const [showAllLatency, setShowAllLatency] = useState(false);
+  const [showAllThroughput, setShowAllThroughput] = useState(false);
+  const [isDuration, setIsDuration] = useState(true);
 
-  const handleChange = (event) => {
-    setisduration(event.target.value);
+  const requestsEntries = useMemo(
+    () => metricEntries(results?.requests, showAllRequests),
+    [results, showAllRequests]
+  );
+  const latencyEntries = useMemo(
+    () => metricEntries(results?.latency, showAllLatency),
+    [results, showAllLatency]
+  );
+  const throughputEntries = useMemo(
+    () => metricEntries(results?.throughput, showAllThroughput),
+    [results, showAllThroughput]
+  );
+
+  const updateNumber = (setter, min, max) => (event) => {
+    const value = Number(event.target.value);
+    if (event.target.value === "") {
+      setter("");
+      return;
+    }
+    setter(Math.min(Math.max(value, min), max));
   };
-  const [timer, setTimer] = useState(0);
 
-  const importantKeys = ["average", "mean", "stddev", "min", "max"];
-
-  const filteredRequestsEntries = Object.entries(results?.requests || {}).filter(
-    ([key]) => showallRequests || importantKeys.includes(key)
-  );
-  const filteredLatencyEntries = Object.entries(results?.latency || {}).filter(
-    ([key]) => showallLatency || importantKeys.includes(key)
-  );
-  const filteredshowallThroughputEntries = Object.entries(results?.throughput || {}).filter(
-    ([key]) => showallThroughput || importantKeys.includes(key)
-  );
+  const validateForm = () => {
+    if (url.trim() === "") return "Please enter a site URL.";
+    if (!Number.isInteger(Number(connections)) || Number(connections) < 1) {
+      return "Connections must be at least 1.";
+    }
+    if (!Number.isInteger(Number(pipelining)) || Number(pipelining) < 1) {
+      return "Pipelining must be at least 1.";
+    }
+    if (!Number.isInteger(Number(duration)) || Number(duration) < 1) {
+      return isDuration ? "Duration must be at least 1 second." : "Requests must be at least 1.";
+    }
+    return "";
+  };
 
   const runTest = async () => {
-    if (url.trim() == "") {
-      return toast.warn("kindly pass Site URL", { autoClose: 1800 });
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      toast.warn(validationMessage, { autoClose: 1800 });
+      return;
     }
 
     setLoading(true);
     setResults(null);
-    const id = toast.loading(`Running ... ${timer}s`);
+    let elapsed = 0;
+    const toastId = toast.loading("Running... 0s");
 
-    let timere = setInterval(() => {
-      setTimer((prev) => {
-        const newTime = prev + 1;
-        toast.update(id, {
-          render: `Running... ${newTime}s`,
-        });
-
-        return newTime;
-      });
+    const timer = setInterval(() => {
+      elapsed += 1;
+      toast.update(toastId, { render: `Running... ${elapsed}s` });
     }, 1000);
 
     try {
-      // const response = await fetch("http://localhost:5006/test", {
-        const response = await fetch("/test", {
+      const response = await fetch("/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, connections, duration, pipelining,isduration })
+        body: JSON.stringify({
+          url: url.trim(),
+          connections: Number(connections),
+          duration: Number(duration),
+          pipelining: Number(pipelining),
+          isduration: isDuration,
+        }),
       });
       const data = await response.json();
-      console.log(data);
+
       if (!response.ok) {
-        // return toast.warn(data.error, { autoClose: 1800 });
-        return toast.update(id, { render: data.error, type: "warning", isLoading: false, autoClose: 1800 });
+        toast.update(toastId, {
+          render: data.error || "Could not run the test.",
+          type: "warning",
+          isLoading: false,
+          autoClose: 2500,
+        });
+        return;
       }
-      // toast.success("Done👍", { autoClose: 1800 });
-      toast.update(id, { render: "Done👍", type: "success", isLoading: false, autoClose: 1800 });
+
+      toast.update(toastId, {
+        render: "Test complete",
+        type: "success",
+        isLoading: false,
+        autoClose: 1800,
+      });
       setResults(data);
     } catch (error) {
-      // toast.error(error?.message || "Something went wrong", { autoClose: 2500 });
-      toast.update(id, { render: error?.message || "Something went wrong", type: "error", isLoading: false, autoClose: 2500 });
+      toast.update(toastId, {
+        render: error?.message || "Something went wrong",
+        type: "error",
+        isLoading: false,
+        autoClose: 2500,
+      });
     } finally {
+      clearInterval(timer);
       setLoading(false);
-      clearInterval(timere);
-      setTimer(0)
     }
   };
- 
 
   return (
-    <div className="container">
-      <h2 className="title">Autocannon Load Tester</h2>
-      <div className="form-group">
-        <TextField id="outlined-basic" label="Enter URL"
-          value={url}
-          sx={{ width: '100%' }}
-          size="small"
-          onChange={(e) => setUrl(e.target.value)}
-          variant="outlined" />
-      </div>
-      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel id="demo-simple-select-label">Select</InputLabel>
-        <Select
-          labelId="demo-simple-select-label"
-          id="demo-simple-select"
-          value={isduration}
-          label="Select"
-          onChange={handleChange}
-        >
-          <MenuItem value={true}>Duration</MenuItem>
-          <MenuItem value={false}>Requests</MenuItem>
-        </Select>
-      </FormControl>
-      <div className="form-row">
-        <Tooltip arrow enterDelay={200} placement="top" title="Number of concurrent TCP connections to use during the test.">
-          <TextField id="outlined-basic" label="Connections"
-            value={connections}
+    <main className="page-shell">
+      <section className="hero-card">
+        <p className="eyebrow">HTTP performance benchmark</p>
+        <h1>Autocannon Load Tester</h1>
+        <p className="subheading">
+          Run a quick load test against a public URL and review latency, request rate,
+          throughput, errors, and response classes in one place.
+        </p>
+
+        <div className="tester-form">
+          <TextField
+            label="Target URL"
+            value={url}
+            fullWidth
             size="small"
-            sx={{ width: '32%' }}
-            required
-            type="number"
-            onChange={(e) => setConnections(Number(e.target.value))}
-            variant="outlined" />
-        </Tooltip>
+            placeholder="example.com or https://example.com"
+            onChange={(event) => setUrl(event.target.value)}
+          />
 
-        <Tooltip arrow enterDelay={200} placement="top" title="Number of requests sent per connection before waiting for a response.">
-          <TextField id="outlined-basic" label="pipelining"
-            value={pipelining}
-            size="small"
-            sx={{ width: '32%' }}
-            type="number"
-            onChange={(e) => setpipelining(Number(e.target.value))}
-            variant="outlined" />
-        </Tooltip>
+          <div className="form-grid">
+            <FormControl fullWidth size="small">
+              <InputLabel id="mode-select-label">Run by</InputLabel>
+              <Select
+                labelId="mode-select-label"
+                value={isDuration}
+                label="Run by"
+                onChange={(event) => setIsDuration(event.target.value)}
+              >
+                <MenuItem value={true}>Duration</MenuItem>
+                <MenuItem value={false}>Total requests</MenuItem>
+              </Select>
+            </FormControl>
 
-        <Tooltip arrow enterDelay={200} placement="top" title={ isduration ? "Duration in second":"Total No of requests"}>
-          <TextField id="outlined-basic" label={isduration ? "Duration (seconds)" : "Requests"}
-            value={duration}
-            size="small"
-            sx={{ width: '32%' }}
-            type="number"
-            onChange={(e) => setDuration(Number(e.target.value))}
-            variant="outlined" />
-        </Tooltip>
-      </div>
-      {/* <button onClick={runTest} disabled={loading} className="btn">
-        {loading ? "Running..." : "Start Test"}
-      </button> */}
-
-      <Button
-        onClick={runTest}
-        loading={loading}
-        loadingPosition="end"
-        variant="contained"
-        sx={{ marginBottom: '10px', width: '98%' }}
-      >
-        Start Test
-        {/* {loading && `${timer}s`} */}
-      </Button>
-
-      {results &&
-        <div className="result">
-          <div style={{ marginTop: '20px', fontSize: '1.4em', fontWeight: '700' }}>Result - {results?.url}</div>
-          <div className="one">
-            <div className="head">Responses ({results?.requests?.total} Total)</div>
-            <div className="bodyhead">
-              <div>
-                <div className="headtitle">1xx</div>
-                <div>{results?.['1xx']}</div>
-              </div>
-              <div>
-                <div className="headtitle">2xx</div>
-                <div>{results?.['2xx']}</div>
-              </div>
-              <div>
-                <div className="headtitle">3xx</div>
-                <div>{results?.['3xx']}</div>
-              </div>
-              <div>
-                <div className="headtitle">4xx</div>
-                <div>{results?.['4xx']}</div>
-              </div>
-              <div>
-                <div className="headtitle">5xx</div>
-                <div>{results?.['5xx']}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="one">
-            <div className="head">Miscellenous</div>
-            <div className="bodyhead">
-              <div>
-                <div className="headtitle">Connections</div>
-                <div>{results?.connections}</div>
-              </div>
-              <div>
-                <div className="headtitle">Duration</div>
-                <div>{results?.duration}</div>
-              </div>
-              <div>
-                <div className="headtitle">Data Read</div>
-                <div>
-                  {results?.throughput?.total > 1024 * 1024
-                    ? `${(results?.throughput?.total / 1024 / 1024).toFixed(1)} MB`
-                    : `${(results?.throughput?.total / 1024).toFixed(1)} KB`}
-                </div>
-
-              </div>
-              <div>
-                <div className="headtitle">Errors</div>
-                <div>{results?.errors}</div>
-              </div>
-              {/* <div>
-              <div className="headtitle">Pipelining</div>
-              <div>{results?.pipelining}</div>
-            </div> */}
-              {/* <div>
-              <div className="headtitle">non2xx</div>
-              <div>{results?.non2xx}</div>
-            </div> */}
-              <div>
-                <div className="headtitle">Timeouts</div>
-                <div>{results?.timeouts}</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="one">
-            <div className="head">Requests</div>
-            <div className="bodyhead">
-              {results &&
-                filteredRequestsEntries.map(([key, value]) => (
-                  <div key={key}>
-                    <div className="headtitle">{key}</div>
-                    <div>{JSON.stringify(value)}</div>
-                  </div>
-                ))}
-              <Button
+            <Tooltip arrow title="Concurrent TCP connections used during the test.">
+              <TextField
+                label="Connections"
+                value={connections}
                 size="small"
-                endIcon={showallRequests ? null : <ChevronRightIcon />}
-                startIcon={showallRequests ? <ChevronLeftIcon /> : null}
-                variant="contained"
-                onClick={() => setshowallRequests(!showallRequests)}
-              >
-                {showallRequests ? "Less" : "More"}
-              </Button>
-            </div>
+                type="number"
+                inputProps={{ min: 1, max: 500 }}
+                onChange={updateNumber(setConnections, 1, 500)}
+              />
+            </Tooltip>
+
+            <Tooltip arrow title="Requests sent per connection before waiting for a response.">
+              <TextField
+                label="Pipelining"
+                value={pipelining}
+                size="small"
+                type="number"
+                inputProps={{ min: 1, max: 100 }}
+                onChange={updateNumber(setPipelining, 1, 100)}
+              />
+            </Tooltip>
+
+            <Tooltip arrow title={isDuration ? "How many seconds the test should run." : "Total request count to send."}>
+              <TextField
+                label={isDuration ? "Duration (seconds)" : "Requests"}
+                value={duration}
+                size="small"
+                type="number"
+                inputProps={{ min: 1, max: 100000 }}
+                onChange={updateNumber(setDuration, 1, 100000)}
+              />
+            </Tooltip>
           </div>
 
-          <div className="one">
-            <div className="head">Latency (in milliseconds)</div>
-            <div className="bodyhead">
-              {results &&
-                filteredLatencyEntries.map(([key, value]) => (
-                  <div key={key}>
-                    <div className="headtitle">{key}</div>
-                    <div>{JSON.stringify(value)}</div>
-                  </div>
-                ))}
-              {/* <button onClick={() => setshowallLatency(!showallLatency)} className="more-button">
-              {showallLatency ? "Show Less" : "Show More"}
-            </button> */}
-              <span style={{ cursor: 'pointer' }}
-                onClick={() => setshowallLatency(!showallLatency)}
-              >
-                <u> {showallLatency ? "Show Less" : "Show More"} </u>
-              </span>
+          <Button
+            onClick={runTest}
+            loading={loading}
+            loadingPosition="end"
+            variant="contained"
+            size="large"
+            disabled={loading}
+            fullWidth
+          >
+            {loading ? "Running test" : "Start test"}
+          </Button>
+        </div>
+      </section>
+
+      {results && (
+        <section className="results-panel">
+          <div className="results-title">
+            <div>
+              <p className="eyebrow">Latest result</p>
+              <h2>{results.url}</h2>
             </div>
+            <span>{formatNumber(results.duration, 1)}s test</span>
           </div>
 
-          <div className="one">
-            <div className="head">Throughput (in bytes per second)</div>
-            <div className="bodyhead">
-              {results &&
-                filteredshowallThroughputEntries.map(([key, value]) => (
-                  <div key={key}>
-                    <div className="headtitle">{key}</div>
-                    <div>{JSON.stringify(value)}</div>
-                  </div>
-                ))}
-              <button onClick={() => setshowallThroughput(!showallThroughput)} className="more-button">
-                {showallThroughput ? "Show Less" : "Show More"}
-              </button>
-            </div>
+          <div className="summary-grid">
+            <StatCard
+              label="Actual requests made"
+              value={formatNumber(results.summary?.actualRequests ?? results.requests?.total, 0)}
+              hint="Total completed requests reported by Autocannon."
+            />
+            <StatCard
+              label="Requested target"
+              value={requestedTargetLabel(results.summary)}
+              hint="The duration or request amount you asked Autocannon to run."
+            />
+            <StatCard label="Avg requests/sec" value={formatNumber(results.requests?.average, 1)} />
+            <StatCard label="Avg latency" value={`${formatNumber(results.latency?.average, 1)} ms`} />
+            <StatCard label="Data read" value={formatBytes(results.throughput?.total)} />
+            <StatCard label="Errors" value={formatNumber(results.errors, 0)} />
+            <StatCard label="Timeouts" value={formatNumber(results.timeouts, 0)} />
           </div>
-        </div>}
-    </div>
+
+          <section className="result-section">
+            <div className="section-header">
+              <div>
+                <h3>Response status classes</h3>
+                <p>Shows how many responses landed in each HTTP status family.</p>
+              </div>
+            </div>
+            <div className="status-grid">
+              <StatCard
+                label="Responses received"
+                value={formatNumber(results.summary?.responsesReceived, 0)}
+                hint="Sum of 1xx, 2xx, 3xx, 4xx, and 5xx responses."
+              />
+              {["1xx", "2xx", "3xx", "4xx", "5xx"].map((key) => (
+                <StatCard key={key} label={key} value={formatNumber(results[key], 0)} />
+              ))}
+            </div>
+          </section>
+
+          <MetricSection
+            title="Requests"
+            unit="Requests per second"
+            entries={requestsEntries}
+            showAll={showAllRequests}
+            onToggle={() => setShowAllRequests((value) => !value)}
+          />
+
+          <MetricSection
+            title="Latency"
+            unit="Milliseconds"
+            entries={latencyEntries}
+            showAll={showAllLatency}
+            onToggle={() => setShowAllLatency((value) => !value)}
+          />
+
+          <MetricSection
+            title="Throughput"
+            unit="Bytes per second"
+            entries={throughputEntries}
+            showAll={showAllThroughput}
+            onToggle={() => setShowAllThroughput((value) => !value)}
+            formatter={formatBytes}
+          />
+        </section>
+      )}
+    </main>
   );
 }
