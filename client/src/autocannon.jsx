@@ -1,135 +1,230 @@
-import { useMemo, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./cannon.css";
-import Button from "@mui/material/Button";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import MenuItem from "@mui/material/MenuItem";
-import Select from "@mui/material/Select";
-import TextField from "@mui/material/TextField";
-import Tooltip from "@mui/material/Tooltip";
+import "./cannon-extra.css";
 import { toast } from "react-toastify";
 
-const PRIMARY_KEYS = ["average", "mean", "stddev", "min", "max"];
-
-const formatNumber = (value, digits = 1) => {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "0";
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: digits,
-  }).format(number);
-};
-
-const formatBytes = (value) => {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB"];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${formatNumber(bytes / 1024 ** index, 1)} ${units[index]}`;
-};
-
-const metricEntries = (section, showAll) => {
-  return Object.entries(section || {}).filter(([key]) => showAll || PRIMARY_KEYS.includes(key));
-};
-
-const requestedTargetLabel = (summary) => {
-  const requested = summary?.requested;
-  if (!requested) return "Not available";
-  return requested.mode === "requests"
-    ? `${formatNumber(requested.target, 0)} requested`
-    : `${formatNumber(requested.target, 0)} seconds`;
-};
-
-const StatCard = ({ label, value, hint }) => (
-  <div className="stat-card" title={hint}>
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
-);
-
-const MetricSection = ({ title, unit, entries, showAll, onToggle, formatter = formatNumber }) => (
-  <section className="result-section">
-    <div className="section-header">
-      <div>
-        <h3>{title}</h3>
-        {unit && <p>{unit}</p>}
-      </div>
-      <Button size="small" variant="outlined" onClick={onToggle}>
-        {showAll ? "Show less" : "Show more"}
-      </Button>
-    </div>
-    <div className="metric-grid">
-      {entries.map(([key, value]) => (
-        <StatCard key={key} label={key} value={formatter(value)} />
-      ))}
-    </div>
-  </section>
-);
+import Navbar from "./components/Navbar";
+import BenchmarkForm from "./components/BenchmarkForm";
+import ResultsDashboard from "./components/ResultsDashboard";
+import HistoryList from "./components/HistoryList";
 
 export default function AutocannonTester() {
-  const [url, setUrl] = useState("");
-  const [connections, setConnections] = useState(4);
-  const [duration, setDuration] = useState(3);
-  const [pipelining, setPipelining] = useState(2);
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [showAllRequests, setShowAllRequests] = useState(false);
-  const [showAllLatency, setShowAllLatency] = useState(false);
-  const [showAllThroughput, setShowAllThroughput] = useState(false);
+  const [url, setUrl] = useState("https://httpbin.org/get");
+  const [method, setMethod] = useState("GET");
+  const [connections, setConnections] = useState(10);
+  const [duration, setDuration] = useState(5);
+  const [pipelining, setPipelining] = useState(1);
   const [isDuration, setIsDuration] = useState(true);
+  const [warmup, setWarmup] = useState(0);
+  const [overallRate, setOverallRate] = useState(0);
 
-  const requestsEntries = useMemo(
-    () => metricEntries(results?.requests, showAllRequests),
-    [results, showAllRequests]
-  );
-  const latencyEntries = useMemo(
-    () => metricEntries(results?.latency, showAllLatency),
-    [results, showAllLatency]
-  );
-  const throughputEntries = useMemo(
-    () => metricEntries(results?.throughput, showAllThroughput),
-    [results, showAllThroughput]
-  );
+  // Advanced headers & body
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [requestBody, setRequestBody] = useState("");
+  const [customHeaders, setCustomHeaders] = useState([{ key: "Accept", value: "application/json" }]);
 
-  const updateNumber = (setter, min, max) => (event) => {
-    const value = Number(event.target.value);
-    if (event.target.value === "") {
-      setter("");
+  // Custom presets
+  const [customPresets, setCustomPresets] = useState([]);
+  const [newPresetName, setNewPresetName] = useState("");
+
+  // Results & Comparison
+  const [results, setResults] = useState(null);
+  const [pinnedResult, setPinnedResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [currentTestId, setCurrentTestId] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const resultsRef = useRef(null);
+
+  // Load history and custom presets from localStorage
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem("cannonpulse_history");
+      if (savedHistory) setHistory(JSON.parse(savedHistory));
+
+      const savedPresets = localStorage.getItem("cannonpulse_custom_presets");
+      if (savedPresets) setCustomPresets(JSON.parse(savedPresets));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const saveToHistory = (item) => {
+    setHistory((prev) => {
+      const updated = [item, ...prev.slice(0, 9)];
+      try {
+        localStorage.setItem("cannonpulse_history", JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem("cannonpulse_history");
+    toast.info("Benchmark history cleared");
+  };
+
+  const saveCustomPreset = () => {
+    const name = newPresetName.trim();
+    if (!name) {
+      toast.warn("Please enter a name for the custom preset.");
       return;
     }
-    setter(Math.min(Math.max(value, min), max));
+    const preset = {
+      label: name,
+      url,
+      method,
+      connections,
+      duration,
+      pipelining,
+      isDuration,
+      warmup,
+      overallRate,
+      body: requestBody,
+    };
+    const updated = [...customPresets.filter((p) => p.label !== name), preset];
+    setCustomPresets(updated);
+    localStorage.setItem("cannonpulse_custom_presets", JSON.stringify(updated));
+    setNewPresetName("");
+    toast.success(`Preset "${name}" saved!`);
+  };
+
+  const deleteCustomPreset = (label) => {
+    const updated = customPresets.filter((p) => p.label !== label);
+    setCustomPresets(updated);
+    localStorage.setItem("cannonpulse_custom_presets", JSON.stringify(updated));
+    toast.info(`Preset "${label}" removed`);
+  };
+
+  const exportJSON = () => {
+    if (!results) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(results, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `benchmark_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    toast.success("Benchmark JSON report downloaded");
+  };
+
+  const exportCSV = () => {
+    if (!results) return;
+    const rows = [
+      ["Metric", "Value", "Unit"],
+      ["Target URL", results.url, ""],
+      ["Method", results.method || method, ""],
+      ["Total Requests", results.summary?.actualRequests ?? results.requests?.total, "requests"],
+      ["Avg Requests/sec", results.requests?.average, "req/s"],
+      ["Avg Latency", results.latency?.average, "ms"],
+      ["p50 Latency", results.latency?.p50, "ms"],
+      ["p75 Latency", results.latency?.p75, "ms"],
+      ["p90 Latency", results.latency?.p90, "ms"],
+      ["p99 Latency", results.latency?.p99, "ms"],
+      ["Throughput Total", results.throughput?.total, "bytes"],
+      ["2xx Responses", results["2xx"] || 0, "count"],
+      ["3xx Responses", results["3xx"] || 0, "count"],
+      ["4xx Responses", results["4xx"] || 0, "count"],
+      ["5xx Responses", results["5xx"] || 0, "count"],
+      ["Errors", results.errors || 0, "count"],
+      ["Timeouts", results.timeouts || 0, "count"],
+    ];
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map((e) => e.map(String).join(",")).join("\n");
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", encodeURI(csvContent));
+    downloadAnchor.setAttribute("download", `benchmark_${Date.now()}.csv`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    toast.success("Benchmark CSV report downloaded");
+  };
+
+  const applyPreset = (preset) => {
+    setUrl(preset.url);
+    setMethod(preset.method || "GET");
+    setConnections(preset.connections);
+    setDuration(preset.duration);
+    setPipelining(preset.pipelining);
+    setIsDuration(preset.isDuration);
+    if (preset.warmup !== undefined) setWarmup(preset.warmup);
+    if (preset.overallRate !== undefined) setOverallRate(preset.overallRate);
+    if (preset.body) {
+      setRequestBody(preset.body);
+      setShowAdvanced(true);
+    }
+    toast.info(`Preset: ${preset.label}`, { autoClose: 1500 });
+  };
+
+  const addHeaderRow = () => {
+    setCustomHeaders((prev) => [...prev, { key: "", value: "" }]);
+  };
+
+  const removeHeaderRow = (idx) => {
+    setCustomHeaders((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateHeaderRow = (idx, field, val) => {
+    setCustomHeaders((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, [field]: val } : item))
+    );
   };
 
   const validateForm = () => {
-    if (url.trim() === "") return "Please enter a site URL.";
-    if (!Number.isInteger(Number(connections)) || Number(connections) < 1) {
-      return "Connections must be at least 1.";
-    }
-    if (!Number.isInteger(Number(pipelining)) || Number(pipelining) < 1) {
-      return "Pipelining must be at least 1.";
-    }
+    if (!url.trim()) return "Target URL cannot be empty";
+    if (!Number.isInteger(Number(connections)) || Number(connections) < 1) return "Connections must be ≥ 1";
+    if (!Number.isInteger(Number(pipelining)) || Number(pipelining) < 1) return "Pipelining must be ≥ 1";
     if (!Number.isInteger(Number(duration)) || Number(duration) < 1) {
-      return isDuration ? "Duration must be at least 1 second." : "Requests must be at least 1.";
+      return isDuration ? "Duration must be ≥ 1 second" : "Requests count must be ≥ 1";
     }
     return "";
   };
 
+  const cancelRunningTest = async () => {
+    if (!currentTestId) return;
+    try {
+      await fetch("/test/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testId: currentTestId }),
+      });
+      toast.warn("Benchmark aborted by user");
+    } catch {
+      toast.error("Failed to signal cancel to server");
+    } finally {
+      setLoading(false);
+      setCurrentTestId(null);
+    }
+  };
+
   const runTest = async () => {
-    const validationMessage = validateForm();
-    if (validationMessage) {
-      toast.warn(validationMessage, { autoClose: 1800 });
+    const errorMsg = validateForm();
+    if (errorMsg) {
+      toast.warn(errorMsg, { autoClose: 2000 });
       return;
     }
 
+    const testId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    setCurrentTestId(testId);
     setLoading(true);
-    setResults(null);
-    let elapsed = 0;
-    const toastId = toast.loading("Running... 0s");
+    setElapsedTime(0);
 
-    const timer = setInterval(() => {
-      elapsed += 1;
-      toast.update(toastId, { render: `Running... ${elapsed}s` });
+    const toastId = toast.loading("Launching CannonPulse engine...");
+
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedTime(elapsed);
+      toast.update(toastId, { render: `Benchmark running... ${elapsed}s` });
     }, 1000);
+
+    const headerObj = {};
+    customHeaders.forEach((h) => {
+      if (h.key.trim()) headerObj[h.key.trim()] = h.value.trim();
+    });
 
     try {
       const response = await fetch("/test", {
@@ -141,195 +236,129 @@ export default function AutocannonTester() {
           duration: Number(duration),
           pipelining: Number(pipelining),
           isduration: isDuration,
+          warmup: Number(warmup),
+          overallRate: Number(overallRate),
+          method,
+          headers: headerObj,
+          body: ["POST", "PUT", "PATCH"].includes(method) ? requestBody : null,
+          testId,
         }),
       });
+
       const data = await response.json();
 
       if (!response.ok) {
         toast.update(toastId, {
-          render: data.error || "Could not run the test.",
-          type: "warning",
+          render: data.error || "Execution failed on target host.",
+          type: "error",
           isLoading: false,
-          autoClose: 2500,
+          autoClose: 3500,
         });
         return;
       }
 
       toast.update(toastId, {
-        render: "Test complete",
+        render: "Benchmark completed successfully!",
         type: "success",
         isLoading: false,
-        autoClose: 1800,
+        autoClose: 2000,
       });
+
       setResults(data);
-    } catch (error) {
+      saveToHistory({
+        timestamp: new Date().toLocaleTimeString(),
+        url: data.url,
+        method,
+        duration: data.duration,
+        reqSec: data.requests?.average,
+        latency: data.latency?.average,
+        fullData: data,
+      });
+
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } catch (err) {
       toast.update(toastId, {
-        render: error?.message || "Something went wrong",
+        render: err?.message || "Failed to contact benchmark daemon.",
         type: "error",
         isLoading: false,
-        autoClose: 2500,
+        autoClose: 3000,
       });
     } finally {
-      clearInterval(timer);
+      clearInterval(interval);
       setLoading(false);
+      setCurrentTestId(null);
     }
   };
 
+  const progressPercent = isDuration
+    ? Math.min(100, Math.round((elapsedTime / Math.max(1, duration)) * 100))
+    : 100;
+
   return (
-    <main className="page-shell">
-      <section className="hero-card">
-        <p className="eyebrow">HTTP performance benchmark</p>
-        <h1>Autocannon Load Tester</h1>
-        <p className="subheading">
-          Run a quick load test against a public URL and review latency, request rate,
-          throughput, errors, and response classes in one place.
-        </p>
+    <div className="app-container">
+      <Navbar />
 
-        <div className="tester-form">
-          <TextField
-            label="Target URL"
-            value={url}
-            fullWidth
-            size="small"
-            placeholder="example.com or https://example.com"
-            onChange={(event) => setUrl(event.target.value)}
-          />
+      <BenchmarkForm
+        url={url}
+        setUrl={setUrl}
+        method={method}
+        setMethod={setMethod}
+        connections={connections}
+        setConnections={setConnections}
+        duration={duration}
+        setDuration={setDuration}
+        pipelining={pipelining}
+        setPipelining={setPipelining}
+        isDuration={isDuration}
+        setIsDuration={setIsDuration}
+        warmup={warmup}
+        setWarmup={setWarmup}
+        overallRate={overallRate}
+        setOverallRate={setOverallRate}
+        showAdvanced={showAdvanced}
+        setShowAdvanced={setShowAdvanced}
+        requestBody={requestBody}
+        setRequestBody={setRequestBody}
+        customHeaders={customHeaders}
+        addHeaderRow={addHeaderRow}
+        removeHeaderRow={removeHeaderRow}
+        updateHeaderRow={updateHeaderRow}
+        customPresets={customPresets}
+        newPresetName={newPresetName}
+        setNewPresetName={setNewPresetName}
+        applyPreset={applyPreset}
+        saveCustomPreset={saveCustomPreset}
+        deleteCustomPreset={deleteCustomPreset}
+        loading={loading}
+        elapsedTime={elapsedTime}
+        progressPercent={progressPercent}
+        onRunTest={runTest}
+        onCancelTest={cancelRunningTest}
+      />
 
-          <div className="form-grid">
-            <FormControl fullWidth size="small">
-              <InputLabel id="mode-select-label">Run by</InputLabel>
-              <Select
-                labelId="mode-select-label"
-                value={isDuration}
-                label="Run by"
-                onChange={(event) => setIsDuration(event.target.value)}
-              >
-                <MenuItem value={true}>Duration</MenuItem>
-                <MenuItem value={false}>Total requests</MenuItem>
-              </Select>
-            </FormControl>
+      <ResultsDashboard
+        results={results}
+        method={method}
+        connections={connections}
+        duration={duration}
+        pinnedResult={pinnedResult}
+        onPinResult={() => {
+          setPinnedResult(results);
+          toast.success("Benchmark pinned for side-by-side comparison!");
+        }}
+        onClearPin={() => setPinnedResult(null)}
+        onExportJSON={exportJSON}
+        onExportCSV={exportCSV}
+        resultsRef={resultsRef}
+      />
 
-            <Tooltip arrow title="Concurrent TCP connections used during the test.">
-              <TextField
-                label="Connections"
-                value={connections}
-                size="small"
-                type="number"
-                inputProps={{ min: 1, max: 500 }}
-                onChange={updateNumber(setConnections, 1, 500)}
-              />
-            </Tooltip>
-
-            <Tooltip arrow title="Requests sent per connection before waiting for a response.">
-              <TextField
-                label="Pipelining"
-                value={pipelining}
-                size="small"
-                type="number"
-                inputProps={{ min: 1, max: 100 }}
-                onChange={updateNumber(setPipelining, 1, 100)}
-              />
-            </Tooltip>
-
-            <Tooltip arrow title={isDuration ? "How many seconds the test should run." : "Total request count to send."}>
-              <TextField
-                label={isDuration ? "Duration (seconds)" : "Requests"}
-                value={duration}
-                size="small"
-                type="number"
-                inputProps={{ min: 1, max: 100000 }}
-                onChange={updateNumber(setDuration, 1, 100000)}
-              />
-            </Tooltip>
-          </div>
-
-          <Button
-            onClick={runTest}
-            loading={loading}
-            loadingPosition="end"
-            variant="contained"
-            size="large"
-            disabled={loading}
-            fullWidth
-          >
-            {loading ? "Running test" : "Start test"}
-          </Button>
-        </div>
-      </section>
-
-      {results && (
-        <section className="results-panel">
-          <div className="results-title">
-            <div>
-              <p className="eyebrow">Latest result</p>
-              <h2>{results.url}</h2>
-            </div>
-            <span>{formatNumber(results.duration, 1)}s test</span>
-          </div>
-
-          <div className="summary-grid">
-            <StatCard
-              label="Actual requests made"
-              value={formatNumber(results.summary?.actualRequests ?? results.requests?.total, 0)}
-              hint="Total completed requests reported by Autocannon."
-            />
-            <StatCard
-              label="Requested target"
-              value={requestedTargetLabel(results.summary)}
-              hint="The duration or request amount you asked Autocannon to run."
-            />
-            <StatCard label="Avg requests/sec" value={formatNumber(results.requests?.average, 1)} />
-            <StatCard label="Avg latency" value={`${formatNumber(results.latency?.average, 1)} ms`} />
-            <StatCard label="Data read" value={formatBytes(results.throughput?.total)} />
-            <StatCard label="Errors" value={formatNumber(results.errors, 0)} />
-            <StatCard label="Timeouts" value={formatNumber(results.timeouts, 0)} />
-          </div>
-
-          <section className="result-section">
-            <div className="section-header">
-              <div>
-                <h3>Response status classes</h3>
-                <p>Shows how many responses landed in each HTTP status family.</p>
-              </div>
-            </div>
-            <div className="status-grid">
-              <StatCard
-                label="Responses received"
-                value={formatNumber(results.summary?.responsesReceived, 0)}
-                hint="Sum of 1xx, 2xx, 3xx, 4xx, and 5xx responses."
-              />
-              {["1xx", "2xx", "3xx", "4xx", "5xx"].map((key) => (
-                <StatCard key={key} label={key} value={formatNumber(results[key], 0)} />
-              ))}
-            </div>
-          </section>
-
-          <MetricSection
-            title="Requests"
-            unit="Requests per second"
-            entries={requestsEntries}
-            showAll={showAllRequests}
-            onToggle={() => setShowAllRequests((value) => !value)}
-          />
-
-          <MetricSection
-            title="Latency"
-            unit="Milliseconds"
-            entries={latencyEntries}
-            showAll={showAllLatency}
-            onToggle={() => setShowAllLatency((value) => !value)}
-          />
-
-          <MetricSection
-            title="Throughput"
-            unit="Bytes per second"
-            entries={throughputEntries}
-            showAll={showAllThroughput}
-            onToggle={() => setShowAllThroughput((value) => !value)}
-            formatter={formatBytes}
-          />
-        </section>
-      )}
-    </main>
+      <HistoryList
+        history={history}
+        onSelectRun={(fullData) => setResults(fullData)}
+        onClearHistory={clearHistory}
+      />
+    </div>
   );
 }

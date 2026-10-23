@@ -11,10 +11,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@emotion/styled": "^11.14.0",
-    "@mui/icons-material": "^7.0.1",
-    "@mui/lab": "^7.0.0-beta.10",
-    "@mui/material": "^7.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-toastify": "^11.0.5"
